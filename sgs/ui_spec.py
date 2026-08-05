@@ -130,6 +130,8 @@ SECTIONS = [
              'step': 0.05, 'label': '仁德送牌惩罚', 'help': '送牌对己方价值的折算系数'},
             {'key': 'guanxing_keep_value', 'type': 'float', 'min': 0.0, 'max': 2.0,
              'step': 0.05, 'label': '观星保留阈值', 'help': '价值高于该值放牌堆顶'},
+            {'key': 'bingliang_prio', 'type': 'bool', 'label': '重视兵粮寸断',
+             'help': 'A 把兵粮寸断视为高价值断粮牌：价值2.2(不弃不制衡)、优先打出(3.0)；断B摸牌=断心战/克己引擎'},
         ],
     },
     # ============ AI·B 专属 ============
@@ -148,8 +150,12 @@ SECTIONS = [
             {'key': 'xinzhan_use', 'type': 'select',
              'options': _sel(('手牌>体力时', 'auto'), ('从不', 'never')),
              'label': '心战'},
+            {'key': 'xinzhan_sell_blood', 'type': 'bool', 'label': '心战卖血流',
+             'help': 'B 存桃不治伤、故意吃伤害（不闪/不应南蛮）保证手牌>体力，心战更易发动'},
             {'key': 'duel_use_when_opp_sha_le', 'type': 'float', 'min': 0.0, 'max': 5.0,
              'step': 0.5, 'label': '决斗触发阈值', 'help': '估计对手杀≤该值才用决斗'},
+            {'key': 'bingliang_hoard', 'type': 'bool', 'label': '囤死兵粮寸断',
+             'help': 'B 绝不使用兵粮寸断，囤死留手牌喂心战（实测囤>打）；关=恢复有就打'},
         ],
     },
     # ============ AI·卡牌与细节 ============

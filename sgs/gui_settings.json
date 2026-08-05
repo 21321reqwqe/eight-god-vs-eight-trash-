@@ -41,13 +41,16 @@
     "rende_max_give": 2,
     "rende_give_penalty": 0.7,
     "guanxing_keep_value": 0.8,
+    "bingliang_prio": true,
     "keji_hoard_sha_gt": 200,
     "keji_attack_when_lethal": true,
     "jushou_hp_le": 2,
     "jushou_opp_hand_le": 1,
     "jushou_hand_gt_hp": true,
     "xinzhan_use": "auto",
+    "xinzhan_sell_blood": true,
     "duel_use_when_opp_sha_le": 1.0,
+    "bingliang_hoard": true,
     "use_nanman": true,
     "use_wanjian": true,
     "use_wugu": true,
@@ -57,7 +60,7 @@
     "hanbing_hunt": false,
     "hanbing_use": false,
     "hanbing_burst": false,
-    "safe_damage_mode": true
+    "safe_damage_mode": false
   },
   "skills": {
     "A": [

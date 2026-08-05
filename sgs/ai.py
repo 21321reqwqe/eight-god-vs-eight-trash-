@@ -141,9 +141,23 @@ class AIController:
         if self.p.hp >= self.p.max_hp or not self.g.strat['peach_when_damaged']:
             return []
         card = self.card_of('桃')
-        if card:
+        if card and not self._keep_peach_for_xinzhan():
             return [('peach', 5.0, lambda: self.g.use_card(self.p, card))]
         return []
+
+    def _keep_peach_for_xinzhan(self):
+        """存桃：心战窗口（手牌>体力）激活时不治伤，桃留作濒死兜底。
+
+        治伤会抬高体力、破坏「手牌>体力」，让本回合心战打不出来。
+        """
+        p = self.p
+        if not (p.has_skill('心战') and not p.used_xinzhan):
+            return False
+        if self.g.strat.get('xinzhan_use') == 'never':
+            return False
+        if not self.g.strat.get('xinzhan_sell_blood', True):
+            return False
+        return len(p.hand) > p.hp and p.hp >= 2
 
     def _act_zhitong(self):
         p = self.p
@@ -208,7 +222,9 @@ class AIController:
             res.append(('le', 1.9, lambda c=card: self.g.use_card(self.p, c, target=self.o)))
         card = self.card_of('兵粮寸断')
         if card and not any(c.name == '兵粮寸断' for c in self.o.judge_zone):
-            res.append(('bingliang', 1.6, lambda c=card: self.g.use_card(self.p, c, target=self.o)))
+            if self._bingliang_timing():
+                v = 3.0 if self.g.strat.get('bingliang_prio', True) else 2.5
+                res.append(('bingliang', v, lambda c=card: self.g.use_card(self.p, c, target=self.o)))
         card = self.card_of('闪电')
         if card and self.p.has_skill('观星') and not any(
                 c.name == '闪电' for pl in self.g.players for c in pl.judge_zone):
@@ -430,7 +446,45 @@ class AIController:
         return (self.p.has_skill('节命') and len(self.p.hand) <= 1
                 and self.p.hp > 2 and not self.g.strat['always_dodge'])
 
+    def _bingliang_timing(self):
+        """蓄意囤积兵粮寸断（仅 B，配置 bingliang_hoard）：B 绝不使用兵粮寸断，
+        囤死留手牌喂心战（实测"囤>打"，无脑打反而耗 B 手牌）。
+        A 或开关关闭时按旧行为（有就打）。"""
+        if self.p is not self.g.b:               # A：有就打
+            return True
+        if not self.g.strat.get('bingliang_hoard', True):
+            return True                          # 开关关：B 恢复旧行为（有就打）
+        return False                             # B 囤死：绝不使用
+
+    def _xinzhan_sell_blood(self, dmg=1):
+        """心战卖血流：故意吃下 dmg 点伤害，换取下一回合心战（手牌>体力）可发动。
+
+        心战要求「手牌>体力」。估计下回合摸牌后手牌≈当前+2（兵粮跳摸则+0）：
+        若恰好=当前体力（不卖就发动不了、卖 dmg 后能发动），且能扛住，则卖血。
+        """
+        p = self.p
+        if not (p.has_skill('心战') and not p.used_xinzhan):
+            return False
+        if self.g.strat.get('xinzhan_use') == 'never':
+            return False
+        if not self.g.strat.get('xinzhan_sell_blood', True):
+            return False
+        draw = 0 if any(c.name == '兵粮寸断' for c in p.judge_zone) else 2
+        if len(p.hand) + draw != p.hp:    # 差太远卖不动；或本来就能发动无需卖
+            return False
+        after = p.hp - dmg
+        if after < 1:
+            return False
+        if after >= 2:
+            return True
+        return self.has('桃')              # 剩1血需桃兜底（配合存桃策略）
+
     def ask_dodge(self, attacker, card):
+        dmg = 1
+        if card and card.subtype == 'sha' and attacker.wine_count > 0:
+            dmg += 1                       # 酒杀 2 点
+        if self._xinzhan_sell_blood(dmg):
+            return False
         if self.g.strat['always_dodge']:
             return self.has('闪')
         if self._sell_for_jiening():
@@ -438,6 +492,8 @@ class AIController:
         return self.has('闪')
 
     def ask_dodge_for_wanjian(self):
+        if self._xinzhan_sell_blood():
+            return False
         if self.g.strat['always_dodge']:
             return self.has('闪')
         if self._sell_for_jiening():
@@ -454,6 +510,9 @@ class AIController:
 
     def ask_sha_for_nanman(self):
         if not self.has_sha():
+            return False
+        # 心战卖血：吃1点伤害换取心战窗口（与克己保牌同理）
+        if self._xinzhan_sell_blood():
             return False
         # 克己：只有1张杀且状态不错时，吃1点伤害保克己
         if self.p.has_skill('克己') and self.count_sha() == 1 and self.p.hp >= 3:
@@ -485,15 +544,15 @@ class AIController:
             return False
         card = self.card_of('桃')
         if card:
+            self.g.log(f'{self.p.name} 在濒死中使用【桃】回复1体力')
             self.g.spend_hand(self.p, card)
             self.p.hp = min(self.p.max_hp, self.p.hp + 1)
-            self.g.log(f'{self.p.name} 在濒死中使用【桃】回复1体力')
             return True
         card = self.card_of('酒')
         if card:
+            self.g.log(f'{self.p.name} 在濒死中以【酒】当桃回复1体力')
             self.g.spend_hand(self.p, card)
             self.p.hp = min(self.p.max_hp, self.p.hp + 1)
-            self.g.log(f'{self.p.name} 在濒死中以【酒】当桃回复1体力')
             return True
         return False
 
@@ -578,7 +637,13 @@ class AIController:
         return min(self.p.hand, key=lambda c: c.rank)
 
     def choose_cards_to_discard(self, n):
-        return sorted(self.p.hand, key=lambda c: EVAL.card_value(self.g, self.p, c))[:n]
+        cards = sorted(self.p.hand, key=lambda c: EVAL.card_value(self.g, self.p, c))
+        # 蓄意囤积（仅 B）：兵粮寸断是断粮锁牌，非万不得已不弃（保证能连段续锁）
+        if self.g.strat.get('bingliang_hoard', True) and self.p is self.g.b:
+            protected = [c for c in cards if c.name != '兵粮寸断']
+            if len(protected) >= n:
+                return protected[:n]
+        return cards[:n]
 
     def choose_zhitong_cards(self):
         thr = self.g.strat['zhitong_value_threshold']
@@ -769,29 +834,49 @@ class AIController:
     def choose_guanxing(self):
         return True
 
+    # 延时锦囊的判定偏好与优先级。判定区同时存在多个延时锦囊时，
+    # 按判定区顺序给每个判定安排一张合适的判定牌（第 0 个判定用第 1 张……）；
+    # 合适牌不够时优先保更重要的判定：闪电（3点伤害）> 乐不思蜀（跳过出牌）> 兵粮寸断（跳过摸牌）。
+    _JUDGE_PREF = {
+        '闪电': lambda card: not card.is_spade_2_9,
+        '乐不思蜀': lambda card: card.is_heart,
+        '兵粮寸断': lambda card: card.suit == CLUB,
+    }
+    _JUDGE_PRIORITY = {'闪电': 0, '乐不思蜀': 1, '兵粮寸断': 2}
+
     def arrange_stargaze(self, top):
         """top 为牌堆顶若干张（最后一个是最顶）。返回 (top_part, bottom_part)，
         top_part 第一个元素最先被摸到。"""
         p = self.p
-        # 判定偏好：有乐/兵粮/闪电在判定区时，优先安排判定牌
-        pref = None
-        for c in p.judge_zone:
-            if c.name == '乐不思蜀':
-                pref = lambda card: card.is_heart
-            elif c.name == '兵粮寸断':
-                pref = lambda card: card.suit == CLUB
-            elif c.name == '闪电':
-                pref = lambda card: not card.is_spade_2_9
-        if pref:
-            good = [c for c in top if pref(c)]
-            if good:
-                first = max(good, key=lambda c: EVAL.card_value(self.g, p, c))
-                rest = [c for c in top if c is not first]
-                keep = [c for c in rest if EVAL.card_value(self.g, p, c) >= self.g.strat['guanxing_keep_value']]
-                keep.sort(key=lambda c: -EVAL.card_value(self.g, p, c))
-                top_part = [first] + keep
-                bottom_part = [c for c in rest if c not in keep]
-                return top_part, bottom_part
+        judge = [c for c in p.judge_zone if c.name in self._JUDGE_PREF]
+        if judge:
+            remaining = list(top)
+            # 分配顺序：默认按重要度（闪电>乐>兵粮）；若可见牌不足以覆盖全部判定，
+            # 退化为按判定顺序填，保证 top_part 从第 1 张起连续可控。
+            order = sorted(range(len(judge)),
+                           key=lambda i: self._JUDGE_PRIORITY[judge[i].name])
+            if len(judge) > len(remaining):
+                order = list(range(len(judge)))
+            arranged = [None] * len(judge)
+            for i in order:
+                if not remaining:
+                    break
+                pref = self._JUDGE_PREF[judge[i].name]
+                cands = [c for c in remaining if pref(c)]
+                # 用价值最低的合适牌挡判定（判定牌会进弃牌堆，别浪费好牌）
+                chosen = min(cands or remaining, key=lambda c: EVAL.card_value(self.g, p, c))
+                arranged[i] = chosen
+                remaining.remove(chosen)
+            # 取从位置 0 开始的连续已填判定牌（空洞=牌在可见范围外，无法控制）
+            top_part = []
+            for c in arranged:
+                if c is None:
+                    break
+                top_part.append(c)
+            keep = [c for c in remaining if EVAL.card_value(self.g, p, c) >= self.g.strat['guanxing_keep_value']]
+            keep.sort(key=lambda c: -EVAL.card_value(self.g, p, c))
+            bottom = [c for c in remaining if c not in keep]
+            return top_part + keep, bottom
         keep = [c for c in top if EVAL.card_value(self.g, p, c) >= self.g.strat['guanxing_keep_value']]
         keep.sort(key=lambda c: -EVAL.card_value(self.g, p, c))
         bottom = [c for c in top if c not in keep]

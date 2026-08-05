@@ -108,6 +108,9 @@ def card_value(g, p, card):
     if name == '兵粮寸断':
         if any(c.name == '兵粮寸断' for c in o.judge_zone):
             return 0.2
+        # 八神重视兵粮：断对手摸牌=断心战/克己引擎，价值提高（不弃不制衡）
+        if g.strat.get('bingliang_prio', True):
+            return 2.2
         return base
     if name == '桃园结义':
         self_gain = p.max_hp - p.hp

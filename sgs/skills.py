@@ -27,9 +27,10 @@ ALL_SKILLS_B = [
 
 # 全部已实现技能名（引擎/技能库/ai 中有引用），GUI 勾选框用。
 # 注意：部分技能在特定对局下天然不生效（如主公技无主公、缔盟单挑不可用）。
-# 克己：代码完整实现（弃牌跳过 + AI 囤杀），但默认不在任何技能组里（2026-08-02 被
-# 雷击/鬼道替换出 B），在此单独加入使 GUI 能勾选（默认不勾）。
-KNOWN_SKILLS = sorted(set(ALL_SKILLS_A + ALL_SKILLS_B + ['克己']))
+# 克己/雷击/鬼道：代码完整实现但默认不在技能组里（2026-08-02 克己替换雷击/鬼道出 B），
+# 在此单独加入使 GUI 能勾选（默认不勾）。雷击=打出闪后令对手判定黑桃受2雷电伤害；
+# 鬼道=判定牌生效前可用黑色牌替换。
+KNOWN_SKILLS = sorted(set(ALL_SKILLS_A + ALL_SKILLS_B + ['克己', '雷击', '鬼道']))
 
 
 class Skills:
@@ -69,6 +70,10 @@ class Skills:
         g.draw_pile = list(bottom_part) + g.draw_pile      # 牌堆底
         g.draw_pile += list(reversed(top_part))            # top_part[0] 最先被摸
         g.log(f'{p.name} 发动【观星】观看 {X} 张')
+        if top_part:
+            g.log(f'{p.name} 观星将 {", ".join(str(c) for c in top_part)} 置于牌堆顶')
+        if bottom_part:
+            g.log(f'{p.name} 观星将 {", ".join(str(c) for c in bottom_part)} 置于牌堆底')
         self._count('观星')
 
     def on_draw_phase(self, p):
@@ -91,8 +96,8 @@ class Skills:
         # 庸肆：额外摸 X（锁定技，X=势力数或自定 YONGSI_CARDS）
         if p.has_skill('庸肆'):
             X = g.yongsi_count()
-            g.draw_cards(p, X)
             g.log(f'{p.name} 因【庸肆】额外摸 {X} 张')
+            g.draw_cards(p, X)
             self._count('庸肆')
 
     def _tuxi(self, p):
@@ -127,13 +132,13 @@ class Skills:
         """回合结束阶段：据守（开始时）→ 闭月。"""
         g = self.g
         if p.alive and p.has_skill('据守') and p.ai.choose_jushou():
+            g.log(f'{p.name} 发动【据守】摸3张并翻面')
             g.draw_cards(p, 3)
             p.face_down = True
-            g.log(f'{p.name} 发动【据守】摸3张并翻面')
             self._count('据守')
         if p.alive and p.has_skill('闭月'):
-            g.draw_cards(p, 1)
             g.log(f'{p.name} 发动【闭月】摸1张')
+            g.draw_cards(p, 1)
             self._count('闭月')
 
     # ============================================================
@@ -145,6 +150,7 @@ class Skills:
             self._bqu(p)
         if p.has_skill('节命') and p.ai.choose_jiening():
             self._jiening(p)
+
 
     def _bqu(self, p):
         """不屈：亮出牌堆顶一张置于武将牌上（engine.check_dying 据此判断存活）。"""
@@ -166,8 +172,8 @@ class Skills:
         target = p.ai.choose_jiening_target()
         n = min(target.max_hp, 5) - len(target.hand)
         if n > 0:
-            g.draw_cards(target, n)
             g.log(f'{p.name} 发动【节命】，令 {target.name} 摸 {n} 张')
+            g.draw_cards(target, n)
             self._count('节命')
 
     def on_damage_dealt(self, source, target, dtype, card):
@@ -215,7 +221,7 @@ class Skills:
             return
         if jc.suit == 'spade':
             g.log(f'【雷击】判定黑桃，造成2点雷电伤害')
-            g.deal_damage(p, target, 2, 'lightning')
+            g.deal_damage(p, target, 2, 'lightning', reason='雷击')
         else:
             g.log(f'【雷击】判定 {jc}，未命中')
         self._count('雷击')
@@ -242,12 +248,12 @@ class Skills:
         if not cards:
             return
         n = len(cards)
+        g.log(f'{p.name} 发动【制衡】弃置 {n} 张并摸 {n} 张')
         for c in list(cards):
             g.remove_card(p, c)
             g.discard.append(c)
         p.used_zhitong = True
         g.draw_cards(p, n)
-        g.log(f'{p.name} 发动【制衡】弃置 {n} 张并摸 {n} 张')
         self._count('制衡')
 
     def skill_rende(self, p):
@@ -283,7 +289,7 @@ class Skills:
         else:
             g.log(f'{p.name} 驱虎拼点获胜（含平局）')
         # 赢：o 对其范围内你选的另一角色（单挑中仅自己）造成1点；输：o 对你造成1点
-        g.deal_damage(o, p, 1)
+        g.deal_damage(o, p, 1, reason='驱虎')
         self._count('驱虎')
 
     def skill_xinzhan(self, p):
@@ -303,7 +309,8 @@ class Skills:
         rest = [c for c in top if c not in take]
         rest_sorted = p.ai.arrange_xinzhan_rest(rest)
         g.draw_pile += list(reversed(rest_sorted))   # rest_sorted[0] 最先被摸
-        g.log(f'{p.name} 发动【心战】，获得 {len(take)} 张红桃')
+        detail = f'：{", ".join(str(c) for c in take)}' if take else ''
+        g.log(f'{p.name} 发动【心战】，获得 {len(take)} 张红桃{detail}')
         self._count('心战')
 
     def skill_dimeng(self, p):

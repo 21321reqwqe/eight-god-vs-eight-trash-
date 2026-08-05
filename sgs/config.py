@@ -80,6 +80,7 @@ STRATEGY = {
     'rende_max_give': 2,           # 仁德：一次最多给几张（控制给敌方的牌量）
     'rende_give_penalty': 0.7,     # 仁德送牌的价值惩罚系数（0.7=送牌不亏；实测提高反而更输）
     'guanxing_keep_value': 0.8,    # 观星：把价值高于该值的牌放牌堆顶，其余放底
+    'bingliang_prio': True,        # 八神重视兵粮寸断：价值提高到2.2（不弃不制衡）、打出优先级3.0（断B摸牌=断心战/克己）
 
     # ---------- B 专属 ----------
     'keji_hoard_sha_gt': 200,      # 克己：手中【杀】超过该张数才考虑主动出杀（囤牌流）
@@ -88,7 +89,9 @@ STRATEGY = {
     'jushou_opp_hand_le': 1,       # 据守：或对手手牌不超过该值（安全）时用
     'jushou_hand_gt_hp': True,     # 据守：或手牌超过体力（反正要弃）时用
     'xinzhan_use': 'auto',         # 心战：'auto'=手牌>体力时用 / 'never'
+    'xinzhan_sell_blood': True,    # 心战卖血流：B 存桃不治伤、故意吃伤害（不闪/不应南蛮）保证手牌>体力可发动心战
     'duel_use_when_opp_sha_le': 1, # B 用决斗：估计对手手里杀不超过该值才用（否则要打出杀破克己）
+    'bingliang_hoard': True,       # 蓄意囤积兵粮寸断（激进）：B 绝不使用兵粮，囤死留手牌喂心战（实测囤>打）
 
     # ---------- 卡牌使用 ----------
     'use_nanman': True,            # 是否使用南蛮入侵

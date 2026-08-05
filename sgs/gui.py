@@ -436,8 +436,11 @@ class App:
                                 state='disabled', bg='#fdfdfd', fg='#222')
         l_sb = ttk.Scrollbar(wrap, orient='vertical', command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=l_sb.set)
+        h_sb = ttk.Scrollbar(wrap, orient='horizontal', command=self.log_text.xview)
+        self.log_text.configure(xscrollcommand=h_sb.set)
         self.log_text.pack(side='left', fill='both', expand=True)
         l_sb.pack(side='right', fill='y')
+        h_sb.pack(side='bottom', fill='x')
         self.log_text.tag_configure('turn', foreground='#b3530e', font=(FONT, 13, 'bold'))
         self.log_text.tag_configure('end', foreground='#0a7d33', font=(FONT, 12, 'bold'))
         self.log_text.bind('<MouseWheel>',
@@ -465,6 +468,7 @@ class App:
                        'after': None}
         self.log_text.config(state='normal')
         self.log_text.delete('1.0', 'end')
+        self.log_text.see('1.0')          # 新一局从顶部开始看
         self.log_text.config(state='disabled')
         self.board_status.config(text=f'（{len(events)} 条日志，按 ▶ 播放；最终结果：{result} 胜）')
         self.btn_toggle.config(state='normal', text='▶ 播放')
@@ -518,7 +522,7 @@ class App:
         self.log_text.config(state='normal')
         self.log_text.insert('end', line + '\n', tag)
         self.log_text.config(state='disabled')
-        self.log_text.see('end')
+        # 不自动滚到底：让用户可自由滚动回看，播放中新行从下方继续追加
 
     _TURN_RE = re.compile(r'第 (\d+) 回合 \[(.+?)\] hp=(\d+) 手牌(\d+)')
 

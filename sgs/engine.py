@@ -284,8 +284,8 @@ class Game:
 
     def _on_hand_lost(self, p):
         if p.has_skill('连营') and not p.hand:
-            self.draw_cards(p, 1)
             self.log(f'{p.name} 触发【连营】摸1张')
+            self.draw_cards(p, 1)
             self._count_skill('连营')
 
     def remove_card(self, p, card):
@@ -378,7 +378,7 @@ class Game:
             elif trick.name == '闪电':
                 if jc.is_spade_2_9:
                     self.discard.append(trick)
-                    self.deal_damage(None, p, 3, 'lightning')
+                    self.deal_damage(None, p, 3, 'lightning', reason='闪电')
                 else:
                     o = self.others(p)[0]
                     o.judge_zone.append(trick)
@@ -387,7 +387,7 @@ class Game:
     # ============================================================
     # 伤害 / 濒死 / 死亡
     # ============================================================
-    def deal_damage(self, source, target, amount, dtype='normal', card=None):
+    def deal_damage(self, source, target, amount, dtype='normal', card=None, reason=''):
         if amount <= 0 or not target.alive:
             return
         # 铁索连环：属性伤害传导
@@ -406,8 +406,10 @@ class Game:
             if dtype == 'fire' and t.armor and t.armor.name == '藤甲':
                 dmg += 1
             if dmg > 0:
+                reason_txt = reason or (card.name if card is not None else '')
+                suffix = f'（{reason_txt}）' if reason_txt else ''
                 self.log(f'{source.name if source else "系统"} 对 {t.name} 造成 {dmg} 点'
-                         f'{DAMAGE_CN.get(dtype, "")}伤害')
+                         f'{DAMAGE_CN.get(dtype, "")}伤害{suffix}')
                 if source:
                     self.stats['dmg_dealt'][source.name] += dmg
                 self.lose_hp(source, t, dmg, dtype, card)
@@ -514,8 +516,8 @@ class Game:
     def use_wuxie(self, p):
         for c in p.hand:
             if c.name == '无懈可击':
-                self.spend_hand(p, c)
                 self.log(f'{p.name} 打出【无懈可击】')
+                self.spend_hand(p, c)
                 self._count_skill('无懈可击')
                 return
 
@@ -543,6 +545,7 @@ class Game:
         if name == '顺手牵羊':
             return self.use_snatch(p, card, target)
         if name == '无中生有':
+            self.log(f'{p.name} 使用【无中生有】')
             self.spend_hand(p, card)
             if self.try_nullify(card, p, [p]):
                 return True
@@ -577,10 +580,10 @@ class Game:
             return False
         if p.used_sha >= 1 and not (p.weapon and p.weapon.name == '诸葛连弩'):
             return False
+        self.log(f'{p.name} 对 {target.name} 使用 {card}')
         self.spend_hand(p, card)
         p.used_sha += 1
         self._note_sha_use(p)
-        self.log(f'{p.name} 对 {target.name} 使用 {card}')
 
         # 黑杀：毅重 / 仁王盾 无效
         if card.color == 'black':
@@ -690,8 +693,8 @@ class Game:
             shan = target.ai.choose_shan_card()
             if shan is None:
                 return False
-            self.spend_hand(target, shan)
             self.log(f'{target.name} 打出 {shan}')
+            self.spend_hand(target, shan)
             self.skills.on_play_shan(target, attacker)
             return True
         return False
@@ -700,9 +703,9 @@ class Game:
         if p.hp >= p.max_hp:
             return False
         card = p.ai.choose_tao_card()
+        self.log(f'{p.name} 使用【桃】回复1体力')
         self.spend_hand(p, card)
         p.hp = min(p.max_hp, p.hp + 1)
-        self.log(f'{p.name} 使用【桃】回复1体力')
         self.skills.on_peach_used(p, p)
         return True
 
@@ -710,10 +713,10 @@ class Game:
         if p.used_wine:
             return False
         card = p.ai.choose_jiu_card()
+        self.log(f'{p.name} 使用【酒】（下张杀伤害+1）')
         self.spend_hand(p, card)
         p.used_wine = True
         p.wine_count = 1
-        self.log(f'{p.name} 使用【酒】（下张杀伤害+1）')
         return True
 
     # ---------- 锦囊 ----------
@@ -722,6 +725,7 @@ class Game:
             return False
         if not target.hand and target.has_skill('空城'):
             return False
+        self.log(f'{p.name} 使用【决斗】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, [target]):
             return True
@@ -737,13 +741,13 @@ class Game:
             guard += 1
             if current.ai.ask_sha_for_duel(other, target):
                 fc = current.ai.choose_sha_card()
+                self.log(f'{current.name} 打出 {fc}')
                 self.spend_hand(current, fc)
                 self._note_sha_use(current)
-                self.log(f'{current.name} 打出 {fc}')
                 current, other = other, current
             else:
                 self.log(f'{current.name} 无法打出【杀】，受到 {other.name} 的1点伤害')
-                self.deal_damage(other, current, 1)
+                self.deal_damage(other, current, 1, reason='决斗')
                 break
             if self.ended:
                 return
@@ -751,6 +755,7 @@ class Game:
     def use_dismantle(self, p, card, target):
         if target is p or not target.alive:
             return False
+        self.log(f'{p.name} 使用【过河拆桥】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, [target]):
             return True
@@ -771,6 +776,7 @@ class Game:
             return False
         if self.distance(p, target) > 1:
             return False
+        self.log(f'{p.name} 使用【顺手牵羊】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, [target]):
             return True
@@ -791,15 +797,16 @@ class Game:
         # 指定另一名角色（1v1 即 p 自己）需在 target 攻击范围内
         if not self.in_range(target, p):
             return False
+        self.log(f'{p.name} 使用【借刀杀人】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, [target]):
             return True
         if target.ai.ask_play_sha_for_borrow(p):
             fc = target.ai.choose_sha_card()
             if fc:
+                self.log(f'{target.name} 按借刀杀人命令打出 {fc}')
                 self.spend_hand(target, fc)
                 self._note_sha_use(target)
-                self.log(f'{target.name} 按借刀杀人命令打出 {fc}')
                 return self.use_sha(target, fc, p)
         # 否则交出武器
         weapon = target.weapon
@@ -809,6 +816,7 @@ class Game:
         return True
 
     def use_wugu(self, p, card):
+        self.log(f'{p.name} 使用【五谷丰登】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, self.alive_players):
             return True
@@ -835,6 +843,7 @@ class Game:
         return True
 
     def use_nanman(self, p, card):
+        self.log(f'{p.name} 使用【南蛮入侵】')
         self.spend_hand(p, card)
         o = self.others(p)[0]
         if self.try_nullify(card, p, [o]):
@@ -845,14 +854,15 @@ class Game:
             # 响应杀需真实打出：消耗手牌并破坏克己（与决斗/借刀一致）
             fc = o.ai.choose_sha_card()
             if fc is not None:
+                self.log(f'{o.name} 打出 {fc} 响应南蛮入侵')
                 self.spend_hand(o, fc)
                 self._note_sha_use(o)   # 回合外响应，不破克己
-                self.log(f'{o.name} 打出 {fc} 响应南蛮入侵')
         else:
-            self.deal_damage(p, o, 1)
+            self.deal_damage(p, o, 1, reason='南蛮入侵')
         return True
 
     def use_wanjian(self, p, card):
+        self.log(f'{p.name} 使用【万箭齐发】')
         self.spend_hand(p, card)
         o = self.others(p)[0]
         if self.try_nullify(card, p, [o]):
@@ -862,14 +872,15 @@ class Game:
         elif o.ai.ask_dodge_for_wanjian():
             shan = o.ai.choose_shan_card()
             if shan is not None:
-                self.spend_hand(o, shan)
                 self.log(f'{o.name} 打出 {shan}')
+                self.spend_hand(o, shan)
                 self.skills.on_play_shan(o, p)
         else:
-            self.deal_damage(p, o, 1)
+            self.deal_damage(p, o, 1, reason='万箭齐发')
         return True
 
     def use_taoyuan(self, p, card):
+        self.log(f'{p.name} 使用【桃园结义】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, self.alive_players):
             return True
@@ -886,27 +897,28 @@ class Game:
             return False
         if any(c.name == card.name for c in target.judge_zone):
             return False
+        self.log(f'{p.name} 对 {target.name} 使用【{card.name}】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, [target]):
             return True
         target.judge_zone.append(card)
-        self.log(f'{p.name} 对 {target.name} 使用【{card.name}】')
         return True
 
     def use_lightning(self, p, card):
         for pl in self.players:
             if any(c.name == '闪电' for c in pl.judge_zone):
                 return False
+        self.log(f'{p.name} 使用【闪电】置于己方判定区')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, [p]):
             return True
         p.judge_zone.append(card)
-        self.log(f'{p.name} 使用【闪电】置于己方判定区')
         return True
 
     def use_fireattack(self, p, card, target):
         if target is p or not target.alive or not target.hand:
             return False
+        self.log(f'{p.name} 使用【火攻】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, [target]):
             return True
@@ -918,12 +930,13 @@ class Game:
             same = next((c for c in p.hand if c.suit == shown.suit), None)
             if same:
                 self.spend_hand(p, same)
-                self.deal_damage(p, target, 1, 'fire')
+                self.deal_damage(p, target, 1, 'fire', reason='火攻')
         return True
 
     def use_chain(self, p, card, targets):
         if not targets:
             return False
+        self.log(f'{p.name} 使用【铁索连环】')
         self.spend_hand(p, card)
         if self.try_nullify(card, p, targets):
             return True
@@ -934,9 +947,9 @@ class Game:
 
     def chongsheng(self, p, card):
         """铁索连环重铸：弃置此牌，摸一张。"""
+        self.log(f'{p.name} 重铸【铁索连环】摸1张')
         self.spend_hand(p, card)
         self.draw_cards(p, 1)
-        self.log(f'{p.name} 重铸【铁索连环】摸1张')
         return True
 
     # ---------- 装备 ----------
@@ -945,11 +958,14 @@ class Game:
                 'p1horse': 'p1horse', 'm1horse': 'm1horse'}[card.subtype]
         old = getattr(p, slot)
         setattr(p, slot, card)
+        if old:
+            self.log(f'{p.name} 装备 {card.name}（替换 {old.name}）')
+        else:
+            self.log(f'{p.name} 装备 {card.name}')
         self.spend_hand(p, card)
         if old:
             self.discard.append(old)
             self._equip_lost(p, old)
-        self.log(f'{p.name} 装备 {card.name}')
         return True
 
     # ---------- 工具 ----------
